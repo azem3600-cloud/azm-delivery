@@ -18,7 +18,7 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - run: tar xzf azm-bundle.tgz && ls -la
+      - run: tar xzf azm-bundle.tgz --skip-old-files && ls -la
       - uses: actions/setup-node@v4
         with:
           node-version: 20
