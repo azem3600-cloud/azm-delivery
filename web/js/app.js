@@ -110,6 +110,7 @@
             <button class="btn btn-sm" id="mute-btn">🔔 الصوت مفعل</button>
             <button class="btn btn-sm" id="logout-btn">خروج</button>
           </div>
+          <button class="btn btn-sm btn-block hidden" id="install-btn" style="margin-top:8px;background:#14b8a6;color:#04201d;border:0">💻 تثبيت كتطبيق على الجهاز</button>
         </div>
       </aside>
       <main class="main">
@@ -123,6 +124,7 @@
       </main>
     </div>`;
     $("#logout-btn").onclick = A.logout;
+    setupInstall();
     $("#menu-btn").onclick = () => $("#side").classList.toggle("open");
     $("#mute-btn").onclick = (e) => {
       S.muted = !S.muted;
@@ -130,6 +132,28 @@
       if (S.muted) A.stopAlarm(); else A.beep(1);
     };
     $$(".nav a").forEach((a) => a.addEventListener("click", () => $("#side").classList.remove("open")));
+  }
+
+  // تثبيت لوحة التحكم كتطبيق (ويندوز / ماك / أندرويد)
+  let installEvt = window.__azmInstallEvt || null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; $("#install-btn")?.classList.remove("hidden"); });
+  window.addEventListener("appinstalled", () => { $("#install-btn")?.classList.add("hidden"); toast("تم تثبيت التطبيق ✅ تلقاه في قائمة ابدأ وسطح المكتب", "ok", 6000); });
+  function setupInstall() {
+    const btn = $("#install-btn"); if (!btn) return;
+    const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    if (standalone) return;
+    btn.classList.remove("hidden");
+    btn.onclick = async () => {
+      if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice; if (r.outcome === "accepted") btn.classList.add("hidden"); installEvt = null; return; }
+      A.modal({ title: "💻 تثبيت لوحة التحكم كتطبيق", body: `
+        <p class="lead">خلّ لوحة التحكم تفتح كتطبيق مستقل على الويندوز بأيقونة على سطح المكتب:</p>
+        <ol style="line-height:2">
+          <li>افتح هذا الموقع في متصفح <b>Google Chrome</b> أو <b>Microsoft Edge</b>.</li>
+          <li>اضغط أيقونة التثبيت <b>⊕</b> في آخر شريط العنوان (يمين الرابط)<br>أو من القائمة <b>⋮</b> ← <b>حفظ ومشاركة</b> ← <b>تثبيت الصفحة كتطبيق</b>.</li>
+          <li>اضغط <b>تثبيت</b> — بيطلع لك التطبيق في قائمة ابدأ وسطح المكتب، وتقدر تثبّته في شريط المهام.</li>
+        </ol>
+        <p class="small muted">💡 لكل فرع: ثبّت التطبيق على جهاز الكاشير وسجّل دخول بحساب الفرع.</p>` });
+    };
   }
 
   function setTitle(t, actionsHtml = "") {
