@@ -36,7 +36,6 @@
     window.addEventListener("hashchange", route);
     setInterval(() => { if (S.route === "live") renderLive(true); }, 30000);
     setInterval(() => loadOrders().then(() => S.route === "live" && renderLive(true)), 90000);
-    setInterval(checkAlarm, 5000);
   }
 
   // =================================================================== login
@@ -129,7 +128,7 @@
     $("#mute-btn").onclick = (e) => {
       S.muted = !S.muted;
       e.target.textContent = S.muted ? "🔕 الصوت مكتوم" : "🔔 الصوت مفعل";
-      if (S.muted) A.stopAlarm(); else A.beep(1);
+      if (S.muted) A.stopAlarm(); else A.playSound("order");
     };
     $$(".nav a").forEach((a) => a.addEventListener("click", () => $("#side").classList.remove("open")));
   }
@@ -196,6 +195,16 @@
     const first = S.lastLoad === 0;
     S.orders = new Map(data.map((o) => [o.id, o]));
     if (first) data.forEach((o) => S.seen.add(o.id));
+    else {
+      // طلبات جديدة وصلت أثناء انقطاع الاتصال اللحظي
+      const fresh = data.filter((o) => o.status === "new" && !S.seen.has(o.id));
+      fresh.forEach((o) => S.seen.add(o.id));
+      if (fresh.length) {
+        if (!S.muted) A.playSound("order");
+        toast(`🛒 ${fresh.length} طلب جديد`, "ok", 6000);
+        A.notify("🛒 طلبات جديدة", `${fresh.length} طلب جديد بانتظار التجهيز`);
+      }
+    }
     S.lastLoad = Date.now();
     updateNavCount();
   }
@@ -223,6 +232,7 @@
       S.orders.set(o.id, o);
       if (isNew && o.status === "new") {
         S.seen.add(o.id);
+        if (!S.muted) A.playSound("order");
         A.notify("🛒 طلب جديد #" + (o.invoice_number || o.id), `${o.customer_name || ""} — ${branchName(o.branch_id)} — ${money(o.total)}`);
         toast(`طلب جديد #${o.invoice_number || o.id} — ${branchName(o.branch_id)}`, "ok", 6000);
         S.flash = o.id;
@@ -243,11 +253,8 @@
     const el = $("#nav-count");
     if (el) { el.textContent = n; el.classList.toggle("hidden", !n); }
   }
-  function checkAlarm() {
-    const hasNew = [...S.orders.values()].some((o) => o.status === "new" && (isAdmin() || o.branch_id === S.me.branch_id));
-    if (hasNew && !S.muted) { if (!S.alarmOn) { S.alarmOn = true; A.startAlarm(); } }
-    else if (S.alarmOn) { S.alarmOn = false; A.stopAlarm(); }
-  }
+  // الصوت يطلع فقط عند وصول طلب جديد (مو مستمر)
+  function checkAlarm() {}
 
   // =================================================================== actions
   async function setStatus(id, status, note) {
