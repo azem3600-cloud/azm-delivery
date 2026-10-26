@@ -421,7 +421,7 @@
         <span class="time">${A.ago(o.order_created_at)}</span></div>
       <div class="cust">${esc(o.customer_name || "عميل")} · <span class="mono small">${esc(o.customer_phone || "")}</span></div>
       <div class="addr">📍 ${esc(o.address_text || o.district || o.city || "—")}</div>
-      <div class="meta"><span class="chip">${num(o.items_count)} منتج</span><span class="chip ${o.is_cod ? "chip-cod" : "chip-paid"}">${money(o.total)}</span></div>
+      <div class="meta"><span class="chip">${num(o.items_count)} منتج</span>${A.payChip(o)}</div>
       <div class="row" style="margin-top:10px;gap:6px">${opts.slice(0, 5).map((b, i) =>
         `<button class="btn btn-sm ${i === 0 ? "btn-primary" : ""}" data-route="${o.id}" data-b="${b.id}">🏪 ${esc(String(b.name).replace("بقالة ", ""))}${b.km != null ? ` · ${num(b.km, 1)} كم` : ""}</button>`).join("")}
         <button class="btn btn-sm btn-ghost" style="color:var(--danger)" data-act="cancel" data-id="${o.id}">✖ إلغاء</button></div>
@@ -441,7 +441,7 @@
         ${isAdmin() ? `<span class="chip">🏪 ${esc(branchName(o.branch_id).replace("بقالة ", ""))}</span>` : ""}
         ${o.distance_km != null ? `<span class="chip">${num(o.distance_km, 1)} كم</span>` : ""}
         <span class="chip">${num(o.items_count)} منتج</span>
-        <span class="chip ${o.is_cod ? "chip-cod" : "chip-paid"}">${o.is_cod ? "💵 " + money(o.cod_amount || o.total) : "مدفوع " + money(o.total)}</span>
+        ${A.payChip(o)}
         ${o.driver_id ? `<span class="chip">🛵 ${esc(staffName(o.driver_id))}</span>` : ""}
         ${o.status === "out_for_delivery" ? `<span class="chip" style="background:#ccfbf1">في الطريق ${A.ago(o.picked_up_at)}</span>` : ""}
         ${o.status === "assigned" ? `<span class="chip">بانتظار استلام المندوب</span>` : ""}
@@ -513,7 +513,8 @@
             <dt>العنوان</dt><dd>${esc(o.address_text || "—")}</dd>
             ${o.short_address ? `<dt>العنوان المختصر</dt><dd class="mono">${esc(o.short_address)}</dd>` : ""}
             <dt>وقت الطلب</dt><dd>${A.fmtDateTime(o.order_created_at)} <span class="muted small">(${A.ago(o.order_created_at)})</span></dd>
-            <dt>الدفع</dt><dd>${esc(o.payment_method || "—")} ${o.is_cod ? `<span class="chip chip-cod">تحصيل ${money(o.cod_amount || o.total)}</span>` : `<span class="chip chip-paid">مدفوع</span>`}</dd>
+            <dt>الدفع</dt><dd>${A.payChip(o)} <span class="muted small">${esc(o.payment_method || "")}</span>
+              ${o.is_cod && canManage && o.status !== "cancelled" ? `<div class="pay-row"><span class="small muted">كيف دفع العميل عند الاستلام؟</span>${A.payToggle(o)}</div>` : ""}</dd>
             ${o.shipping_method ? `<dt>طريقة الشحن</dt><dd>${esc(o.shipping_method)}</dd>` : ""}
             ${o.customer_note ? `<dt>ملاحظة العميل</dt><dd style="color:var(--warn)">${esc(o.customer_note)}</dd>` : ""}
           </dl>
@@ -556,6 +557,7 @@
       </div></div>`;
     $("#dclose").onclick = closeDrawer;
     bindCards(wrap);
+    A.bindPayToggle(wrap, (r) => { if (r?.id) S.orders.set(r.id, r); openOrder(o.id, true); });
     $("#add-note").onclick = async () => {
       const n = await A.promptBox("إضافة ملاحظة", "الملاحظة", { required: true });
       if (n) { try { await A.rpc("add_order_note", { p_order_id: o.id, p_note: n }); openOrder(o.id, true); } catch (e) { toast(A.errMsg(e), "error"); } }
@@ -590,7 +592,7 @@
       <div>العنوان: ${esc(o.address_text || "")}</div><hr>
       <table style="width:100%;font-size:12px">${(o.items || []).map((i) => `<tr><td>${esc(i.name)}</td><td>×${num(i.quantity)}</td><td>${i.total != null ? num(i.total, 2) : ""}</td></tr>`).join("")}</table><hr>
       <div><b>الإجمالي: ${money(o.total)}</b></div>
-      <div>${o.is_cod ? `<b>المطلوب تحصيله: ${money(o.cod_amount || o.total)}</b>` : "مدفوع مسبقاً"}</div>
+      <div>${o.is_cod ? `<b>المطلوب تحصيله: ${money(o.cod_amount || o.total)}</b> — ${o.cod_method === "card" ? "💳 شبكة / بطاقة" : o.cod_method === "cash" ? "💵 نقداً" : "عند الاستلام"}` : "✅ مدفوع مسبقاً"}</div>
       ${o.customer_note ? `<div>ملاحظة: ${esc(o.customer_note)}</div>` : ""}
     </div>`;
     window.print();
@@ -616,7 +618,7 @@
       <label class="field"><span>المنتجات (كل منتج في سطر — مثال: 2 خبز)</span><textarea id="m-items" rows="4"></textarea></label>
       <div class="grid-3">
         <label class="field"><span>الإجمالي (ر.س)</span><input id="m-total" type="number" step="0.01" min="0"></label>
-        <label class="field"><span>الدفع</span><select id="m-cod"><option value="1">عند الاستلام</option><option value="0">مدفوع</option></select></label>
+        <label class="field"><span>الدفع</span><select id="m-cod"><option value="1">💵 عند الاستلام — نقداً</option><option value="card">💳 عند الاستلام — شبكة</option><option value="0">✅ مدفوع مسبقاً</option></select></label>
         <label class="field"><span>الفرع</span><select id="m-branch"><option value="">تلقائي (الأقرب)</option>${S.branches.map((b) => `<option value="${b.id}">${esc(b.name)}</option>`).join("")}</select></label>
       </div>
       <label class="field"><span>ملاحظة</span><input id="m-note"></label>`;
@@ -648,9 +650,11 @@
             const o = await A.rpc("create_manual_order", { p: {
               customer_name: name, customer_phone: phone, lat: pos?.lat ?? "", lon: pos?.lon ?? "",
               district: $("#m-district", body).value, city: $("#m-city", body).value, address_text: $("#m-addr", body).value,
-              items, total: $("#m-total", body).value || 0, is_cod: $("#m-cod", body).value === "1",
+              items, total: $("#m-total", body).value || 0, is_cod: $("#m-cod", body).value !== "0",
               branch_id: $("#m-branch", body).value, customer_note: $("#m-note", body).value } });
-            S.orders.set(o.id, o); S.seen.add(o.id);
+            let oo = o;
+            if (o.is_cod) oo = await A.rpc("set_cod_method", { p_order_id: o.id, p_method: $("#m-cod", body).value === "card" ? "card" : "cash" }).catch(() => o);
+            S.orders.set(oo.id, oo); S.seen.add(oo.id);
             toast(`تم إنشاء الطلب ووجّه إلى ${branchName(o.branch_id)}`, "ok");
             if (S.route === "live") renderLive(true);
           } },
@@ -758,7 +762,7 @@
         ${rows.map((o) => `<tr class="click" data-open="${o.id}"><td><b>#${esc(o.invoice_number || o.id)}</b></td><td class="small">${A.fmtDateTime(o.order_created_at)}</td>
         <td>${esc(o.customer_name)}</td><td class="mono small">${esc(o.customer_phone || "")}</td><td class="small">${esc(branchName(o.branch_id))}</td>
         <td class="small">${esc(staffName(o.driver_id))}</td><td>${A.statusBadge(o.status)}</td><td>${money(o.total)}</td>
-        <td>${o.is_cod ? `<span class="chip chip-cod">عند الاستلام</span>` : `<span class="chip chip-paid">مدفوع</span>`}</td></tr>`).join("")}</tbody></table>`
+        <td>${A.payChip(o, false)}</td></tr>`).join("")}</tbody></table>`
         : `<div class="empty">لا توجد طلبات بهذه الفلاتر</div>`;
       bindCards($("#h-table"));
     };
@@ -789,7 +793,7 @@
       "الفرع": branchName(o.branch_id), "المسافة كم": o.distance_km, "المندوب": staffName(o.driver_id),
       "الحالة": STATUS[o.status]?.label, "عدد المنتجات": o.items_count,
       "المنتجات": (o.items || []).map((i) => `${i.name} × ${i.quantity}`).join(" | "),
-      "الإجمالي": Number(o.total), "طريقة الدفع": o.payment_method, "عند الاستلام": o.is_cod ? "نعم" : "لا",
+      "الإجمالي": Number(o.total), "طريقة الدفع": o.payment_method, "عند الاستلام": o.is_cod ? "نعم" : "لا", "طريقة التحصيل": A.payInfo(o).label,
       "وقت التجهيز (د)": o.ready_at ? Math.round((new Date(o.ready_at) - new Date(o.received_at)) / 60000) : "",
       "وقت التوصيل (د)": o.delivered_at && o.picked_up_at ? Math.round((new Date(o.delivered_at) - new Date(o.picked_up_at)) / 60000) : "",
       "وقت التسليم": o.delivered_at ? A.fmtDateTime(o.delivered_at) : "", "سبب الإلغاء": o.cancel_reason || "",
@@ -834,7 +838,8 @@
         <div class="stat"><div class="k">تم التسليم</div><div class="v" style="color:var(--ok)">${num(d.delivered)}</div><div class="s">${d.total ? Math.round(d.delivered / d.total * 100) : 0}%</div></div>
         <div class="stat"><div class="k">ملغية</div><div class="v" style="color:var(--danger)">${num(d.cancelled)}</div></div>
         <div class="stat"><div class="k">المبيعات المسلّمة</div><div class="v" style="font-size:21px">${money(d.revenue)}</div></div>
-        <div class="stat"><div class="k">تحصيل نقدي</div><div class="v" style="font-size:21px">${money(d.cod_collected)}</div></div>
+        <div class="stat"><div class="k">💵 تحصيل نقدي</div><div class="v" style="font-size:21px">${money(d.cod_collected)}</div></div>
+        <div class="stat"><div class="k">💳 شبكة عند الاستلام</div><div class="v" style="font-size:21px;color:#1d4ed8">${money(d.cod_card || 0)}</div><div class="s">مدفوع مسبقاً: ${money(d.prepaid || 0)}</div></div>
         <div class="stat"><div class="k">متوسط التجهيز</div><div class="v">${d.avg_prep_min ?? "—"}<small> د</small></div></div>
         <div class="stat"><div class="k">متوسط التوصيل</div><div class="v">${d.avg_delivery_min ?? "—"}<small> د</small></div></div>
         <div class="stat"><div class="k">متوسط المدة الكاملة</div><div class="v">${d.avg_total_min ?? "—"}<small> د</small></div><div class="s">متوسط المسافة ${d.avg_distance_km ?? "—"} كم</div></div>
@@ -844,8 +849,8 @@
           ${d.by_branch.map((b) => `<div class="bar"><span>${esc(b.name.replace("بقالة ", ""))}</span><div class="track"><div class="fill" style="width:${b.total / maxB * 100}%"></div></div><b>${b.total}</b></div>`).join("")}</div>
           <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>الفرع</th><th>مسلّم</th><th>ملغي</th><th>المبيعات</th><th>متوسط المدة</th></tr></thead><tbody>
           ${d.by_branch.map((b) => `<tr><td>${esc(b.name)}</td><td>${b.delivered}</td><td>${b.cancelled}</td><td>${money(b.revenue)}</td><td>${b.avg_total_min ?? "—"} د</td></tr>`).join("")}</tbody></table></div></div>
-        <div class="card"><div class="card-head"><h3>🛵 أداء المناديب</h3></div><div class="table-wrap"><table><thead><tr><th>المندوب</th><th>الفرع</th><th>طلبات مسلّمة</th><th>نقدي محصّل</th><th>متوسط التوصيل</th></tr></thead><tbody>
-          ${d.by_driver.sort((a, b) => b.delivered - a.delivered).map((x) => `<tr><td>${esc(x.name)}</td><td class="small">${esc(branchName(x.branch_id))}</td><td><b>${x.delivered}</b></td><td>${money(x.cod)}</td><td>${x.avg_delivery_min ?? "—"} د</td></tr>`).join("") || `<tr><td colspan="5" class="empty">لا يوجد</td></tr>`}</tbody></table></div></div>
+        <div class="card"><div class="card-head"><h3>🛵 أداء المناديب</h3></div><div class="table-wrap"><table><thead><tr><th>المندوب</th><th>الفرع</th><th>طلبات مسلّمة</th><th>💵 نقدي محصّل</th><th>💳 شبكة</th><th>متوسط التوصيل</th></tr></thead><tbody>
+          ${d.by_driver.sort((a, b) => b.delivered - a.delivered).map((x) => `<tr><td>${esc(x.name)}</td><td class="small">${esc(branchName(x.branch_id))}</td><td><b>${x.delivered}</b></td><td>${money(x.cod)}</td><td>${money(x.card || 0)}</td><td>${x.avg_delivery_min ?? "—"} د</td></tr>`).join("") || `<tr><td colspan="6" class="empty">لا يوجد</td></tr>`}</tbody></table></div></div>
       </div>
       <div class="card" style="margin-top:14px"><div class="card-head"><h3>⏰ الطلبات حسب الساعة</h3></div>
         <div class="vbars" style="margin-bottom:22px">${hours.map((n, h) => `<div class="vb" style="height:${n / maxH * 100}%" data-v="${n}"><span>${h}</span></div>`).join("")}</div></div>
@@ -1077,6 +1082,26 @@
       </div>
 
       <div class="card">
+        <div class="card-head"><h3>🔄 تحديث حالة الطلب في زد تلقائياً</h3><span class="spacer"></span>
+          ${st.zapier_status_hook_set ? `<span class="badge" style="background:#dcfce7;color:#166534">✅ مفعّل</span>` : `<span class="badge" style="background:#fef3c7;color:#92400e">⏳ يحتاج رابط Zapier</span>`}</div>
+        <p class="small muted" style="margin-top:0">كل ما يتغيّر الطلب عندنا يتحدّث في زد مباشرة:
+          <span class="chip">قيد التجهيز → جاري التجهيز</span> <span class="chip">جاهز → جاهز</span> <span class="chip">خرج مع المندوب → جاري التوصيل</span> <span class="chip">تم التسليم → تم التوصيل</span> <span class="chip">ملغي → ملغي</span></p>
+        <div class="row" style="align-items:flex-end">
+          <label class="field" style="flex:1;min-width:260px;margin:0"><span>رابط Webhook من Zapier ${st.zapier_status_hook_set ? "✅ (محفوظ — اتركه فاضي إذا ما تبي تغيّره)" : ""}</span>
+            <input id="zh-url" dir="ltr" type="password" autocomplete="off" placeholder="${st.zapier_status_hook_set ? "••••••••" : "https://hooks.zapier.com/hooks/catch/..."}"></label>
+          <button class="btn btn-primary" id="zh-save">حفظ</button>
+          ${st.zapier_status_hook_set ? `<button class="btn btn-ghost" style="color:var(--danger)" id="zh-clear">إيقاف</button>` : ""}
+        </div>
+        <div class="row small" style="margin-top:10px;gap:6px">
+          <span class="chip">أُرسل اليوم: <b>${num(st.zid_outbox_sent_today ?? 0)}</b></span>
+          <span class="chip">بالانتظار: <b>${num(st.zid_outbox_pending ?? 0)}</b></span>
+          <span class="chip ${st.zid_outbox_failed ? "chip-warn" : ""}">فشل بعد 5 محاولات: <b>${num(st.zid_outbox_failed ?? 0)}</b></span>
+          <span class="spacer"></span><button class="btn btn-sm" id="zh-log">📜 آخر التحديثات المرسلة</button>
+        </div>
+        <div class="table-wrap hidden" id="zh-table" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><h3>⚙️ خيارات المزامنة</h3></div>
         <label class="row" style="margin-bottom:10px"><input type="checkbox" id="o-push" style="width:auto;min-height:auto" ${st.zid_push_status !== false ? "checked" : ""}> تحديث حالة الطلب في زد تلقائياً (قيد التجهيز ← جاهز ← جاري التوصيل ← تم التوصيل)</label>
         <div class="field"><span>استيراد الطلبات التي حالتها في زد:</span><div class="row">
@@ -1104,6 +1129,27 @@
         const ship = $("#o-ship").value.split(/[,،]/).map((s) => s.trim()).filter(Boolean);
         await save("zid_shipping_filter", ship.length ? ship : null);
         toast("تم الحفظ", "ok");
+      } catch (e) { toast(A.errMsg(e), "error"); }
+    };
+    $("#zh-save").onclick = async () => {
+      const v = $("#zh-url").value.trim();
+      if (!v) return toast(st.zapier_status_hook_set ? "الرابط محفوظ مسبقاً" : "الصق رابط Zapier أولاً", st.zapier_status_hook_set ? "ok" : "error");
+      if (!/^https:\/\/hooks\.zapier\.com\//.test(v)) return toast("الرابط لازم يبدأ بـ https://hooks.zapier.com/", "error");
+      try { await save("zapier_status_hook", v); toast("✅ تم التفعيل — الحالات بتتحدث في زد تلقائياً", "ok"); renderSettings(); } catch (e) { toast(A.errMsg(e), "error"); }
+    };
+    $("#zh-clear")?.addEventListener("click", async () => {
+      if (!(await A.confirmBox("إيقاف التحديث التلقائي", "توقف إرسال الحالات لزد؟", "إيقاف", "btn-danger"))) return;
+      try { await save("zapier_status_hook", ""); toast("تم الإيقاف", "ok"); renderSettings(); } catch (e) { toast(A.errMsg(e), "error"); }
+    });
+    $("#zh-log").onclick = async () => {
+      const t = $("#zh-table"); t.classList.toggle("hidden"); if (t.classList.contains("hidden")) return;
+      try {
+        const rows = await A.rpc("admin_zid_outbox", { p_limit: 40 });
+        const lbl = { preparing: "جاري التجهيز", ready: "جاهز", indelivery: "جاري التوصيل", delivered: "تم التوصيل", cancelled: "ملغي" };
+        t.innerHTML = rows?.length ? `<table><thead><tr><th>الوقت</th><th>طلب زد</th><th>الحالة المرسلة</th><th>النتيجة</th><th>محاولات</th></tr></thead><tbody>
+          ${rows.map((r) => `<tr><td class="small">${A.fmtDateTime(r.created_at)}</td><td class="mono">#${esc(r.zid_order_id)}</td><td>${esc(lbl[r.zid_status] || r.zid_status)}</td>
+          <td class="small">${r.done ? (/أحدث/.test(r.last_error || "") ? "⏭️ تجاوزه تحديث أحدث" : "✅ وصل") : r.attempts >= 5 ? `❌ فشل ${esc(r.last_error || "")}` : "⏳ جاري الإرسال"}</td><td>${r.attempts}</td></tr>`).join("")}</tbody></table>`
+          : `<div class="empty">لا يوجد تحديثات بعد</div>`;
       } catch (e) { toast(A.errMsg(e), "error"); }
     };
     const fnCall = async (action, extra = "") => {

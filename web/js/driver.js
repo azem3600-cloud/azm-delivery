@@ -266,7 +266,9 @@
       <div class="row small">${dist !== null ? `<span class="chip">📏 ${dist.toFixed(1)} كم منك</span>` : ""}<span class="chip">🛒 ${num(o.items_count)} منتج</span>
         ${o.customer_phone ? `<span class="chip mono">${esc(o.customer_phone)}</span>` : ""}</div>
       ${o.customer_note ? `<div class="chip chip-warn" style="margin-top:8px;white-space:normal">📝 ${esc(o.customer_note)}</div>` : ""}
-      ${o.is_cod ? `<div class="cod-box">💵 حصّل من العميل: ${money(o.cod_amount || o.total)}</div>` : `<div class="paid-box">✅ مدفوع مسبقاً — لا تحصّل شيء</div>`}
+      ${o.is_cod ? `<div class="cod-box ${o.cod_method === "card" ? "is-card" : ""}">
+        <div class="cod-amt">${o.cod_method === "card" ? "💳" : "💵"} حصّل من العميل: <b>${money(o.cod_amount || o.total)}</b></div>
+        <div class="cod-q">كيف بيدفع العميل؟</div>${A.payToggle(o)}</div>` : `<div class="paid-box">✅ مدفوع مسبقاً — لا تحصّل شيء</div>`}
       <div class="quick">
         <a class="nav-btn" href="${A.navLink(o.lat, o.lon)}" target="_blank" ${o.lat ? "" : `onclick="return false" style="opacity:.4"`}><span class="ic">🧭</span>الملاحة</a>
         <a href="${A.telLink(o.customer_phone)}"><span class="ic">📞</span>اتصال</a>
@@ -284,6 +286,10 @@
   }
 
   function bind() {
+    A.bindPayToggle($("#list"), (r) => {
+      const i = S.orders.findIndex((x) => x.id === r?.id);
+      if (i >= 0) { S.orders[i] = r; $("#list").innerHTML = S.orders.map(cardHtml).join(""); bind(); }
+    });
     $$("[data-a]").forEach((b) => b.onclick = async () => {
       const o = S.orders.find((x) => x.id === Number(b.dataset.id));
       if (!o) return;
@@ -298,10 +304,12 @@
         } catch (e) { toast(A.errMsg(e), "error"); }
         loadOrders();
       } else if (b.dataset.a === "deliver") {
-        const txt = o.is_cod ? `تأكد إنك استلمت ${money(o.cod_amount || o.total)} من العميل.` : "تأكيد تسليم الطلب للعميل؟";
-        if (!(await A.confirmBox("تأكيد التسليم", txt, "✅ نعم، تم التسليم", "btn-ok"))) return;
+        let method = null;
+        if (o.is_cod) { method = await askPayMethod(o); if (!method) return; }
+        else if (!(await A.confirmBox("تأكيد التسليم", "تأكيد تسليم الطلب للعميل؟", "✅ نعم، تم التسليم", "btn-ok"))) return;
         b.disabled = true;
         try {
+          if (method && method !== o.cod_method) await A.rpc("set_cod_method", { p_order_id: o.id, p_method: method });
           if (S.lastPos) await sendPing(S.lastPos, true);
           await A.rpc("set_order_status", { p_order_id: o.id, p_status: "delivered", p_note: null });
           toast("ممتاز 👏 تم تسليم الطلب", "ok");
@@ -316,14 +324,38 @@
     });
   }
 
+  // سؤال المندوب عند التسليم: العميل دفع نقداً ولا شبكة؟
+  function askPayMethod(o) {
+    return new Promise((resolve) => {
+      let pick = o.cod_method || null, done = false;
+      const body = document.createElement("div");
+      body.innerHTML = `<p class="lead" style="margin-top:0">المبلغ: <b>${money(o.cod_amount || o.total)}</b> — كيف دفع العميل؟</p>
+        <div class="pay-pick">
+          <button type="button" data-m="cash"><span class="ic">💵</span>نقداً<small>استلمت المبلغ كاش</small></button>
+          <button type="button" data-m="card"><span class="ic">💳</span>شبكة / بطاقة<small>دفع بجهاز الشبكة</small></button>
+        </div>`;
+      const sync = () => body.querySelectorAll("[data-m]").forEach((x) => x.classList.toggle("on", x.dataset.m === pick));
+      body.querySelectorAll("[data-m]").forEach((x) => x.onclick = () => { pick = x.dataset.m; sync(); });
+      sync();
+      A.modal({ title: "✅ تأكيد التسليم", body, actions: [
+        { label: "إلغاء", cls: "btn-ghost", onClick: () => { done = true; resolve(null); } },
+        { label: "✅ تم التسليم", cls: "btn-ok", onClick: () => {
+            if (!pick) { toast("اختر طريقة الدفع: نقداً أو شبكة", "error"); return false; }
+            done = true; resolve(pick); } },
+      ], onClose: () => { if (!done) resolve(null); } });
+    });
+  }
+
   function renderDone() {
-    const cod = S.done.filter((o) => o.is_cod).reduce((a, o) => a + Number(o.cod_amount || o.total || 0), 0);
+    const sum = (f) => S.done.filter(f).reduce((a, o) => a + Number(o.cod_amount || o.total || 0), 0);
+    const cash = sum((o) => o.is_cod && o.cod_method !== "card"), card = sum((o) => o.is_cod && o.cod_method === "card");
     $("#list").innerHTML = `<div class="d-summary">
         <div class="stat"><div class="k">طلبات مسلّمة اليوم</div><div class="v">${S.done.length}</div></div>
-        <div class="stat"><div class="k">نقدي معك للتسليم</div><div class="v" style="color:#92400e">${money(cod)}</div></div></div>
+        <div class="stat"><div class="k">💵 نقدي معك للتسليم</div><div class="v" style="color:#92400e">${money(cash)}</div></div>
+        <div class="stat"><div class="k">💳 شبكة (ما يحتاج تسلّمه)</div><div class="v" style="color:#1d4ed8">${money(card)}</div></div></div>
       ${S.done.map((o) => `<div class="d-card"><div class="hdr"><span class="num">#${esc(o.invoice_number || o.id)}</span>${A.statusBadge(o.status)}<span class="spacer"></span><span class="small muted">${A.fmtTime(o.delivered_at)}</span></div>
         <div><b>${esc(o.customer_name || "")}</b> — ${esc(o.district || "")}</div>
-        <div class="small">${o.is_cod ? `💵 نقدي ${money(o.cod_amount || o.total)}` : "مدفوع"} · مدة التوصيل ${o.picked_up_at ? Math.round((new Date(o.delivered_at) - new Date(o.picked_up_at)) / 60000) + " د" : "—"}</div></div>`).join("")
+        <div class="small">${o.is_cod ? (o.cod_method === "card" ? `💳 شبكة ${money(o.cod_amount || o.total)}` : `💵 نقدي ${money(o.cod_amount || o.total)}`) : "✅ مدفوع مسبقاً"} · مدة التوصيل ${o.picked_up_at ? Math.round((new Date(o.delivered_at) - new Date(o.picked_up_at)) / 60000) + " د" : "—"}</div></div>`).join("")
         || `<div class="d-empty"><div class="ic">📭</div><p>لا يوجد طلبات مكتملة اليوم</p></div>`}`;
   }
 

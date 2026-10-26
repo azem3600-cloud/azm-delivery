@@ -273,6 +273,42 @@
       </li>`).join("")}</ul>`;
   }
 
+  // ---- طريقة الدفع: مدفوع مسبقاً / عند الاستلام (نقداً أو شبكة)
+  function payInfo(o) {
+    if (!o?.is_cod) return { kind: "prepaid", icon: "✅", label: "مدفوع مسبقاً", cls: "chip-paid" };
+    if (o.cod_method === "card") return { kind: "card", icon: "💳", label: "شبكة عند الاستلام", cls: "chip-card" };
+    if (o.cod_method === "cash") return { kind: "cash", icon: "💵", label: "نقداً عند الاستلام", cls: "chip-cod" };
+    return { kind: "cod", icon: "💵", label: "عند الاستلام", cls: "chip-cod" };
+  }
+  function payChip(o, withAmount = true) {
+    const p = payInfo(o);
+    const amt = withAmount ? " " + money(o.is_cod ? (o.cod_amount || o.total) : o.total) : "";
+    return `<span class="chip ${p.cls}" title="${esc(o.payment_method || p.label)}">${p.icon} ${p.label}${amt}</span>`;
+  }
+  function payToggle(o) {
+    if (!o?.is_cod) return "";
+    const m = o.cod_method || "";
+    return `<div class="pay-seg" role="radiogroup" aria-label="طريقة التحصيل" data-pay-for="${o.id}">
+      <button type="button" data-m="cash" class="${m === "cash" ? "on" : ""}" aria-pressed="${m === "cash"}">💵 نقداً</button>
+      <button type="button" data-m="card" class="${m === "card" ? "on" : ""}" aria-pressed="${m === "card"}">💳 شبكة / بطاقة</button></div>`;
+  }
+  // يربط أزرار نقداً/شبكة داخل عنصر — onDone(order) بعد الحفظ
+  function bindPayToggle(root, onDone) {
+    root.querySelectorAll(".pay-seg[data-pay-for] button[data-m]").forEach((b) => b.onclick = async (ev) => {
+      ev.stopPropagation();
+      const seg = b.closest(".pay-seg"); const id = Number(seg.dataset.payFor);
+      if (b.classList.contains("on")) return;
+      seg.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+      try {
+        const o = await rpc("set_cod_method", { p_order_id: id, p_method: b.dataset.m });
+        seg.querySelectorAll("button").forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", x === b); });
+        toast(b.dataset.m === "card" ? "تم: الدفع بالشبكة 💳" : "تم: الدفع نقداً 💵", "ok");
+        onDone && onDone(o);
+      } catch (e) { toast(errMsg(e), "error"); }
+      finally { seg.querySelectorAll("button").forEach((x) => { x.disabled = false; }); }
+    });
+  }
+
   function statusBadge(s) {
     const st = STATUS[s] || { label: s, color: "#555", bg: "#eee" };
     return `<span class="badge" style="color:${st.color};background:${st.bg}">${st.icon || ""} ${st.label}</span>`;
@@ -281,6 +317,6 @@
   window.AZM = {
     sb, C, STATUS, ROLES, ACTIVE, $, $$, esc, money, num, fmtTime, fmtDateTime, ago, minutesSince, haversine,
     phoneIntl, telLink, waLink, mapsLink, navLink, productUrl, parseCoords, toast, modal, confirmBox, promptBox, errMsg,
-    rpc, callFn, login, myProfile, logout, beep, playSound, stopSound, startAlarm, stopAlarm, unlockAudio, notify, itemsHtml, statusBadge, toEmail,
+    rpc, callFn, login, myProfile, logout, beep, playSound, stopSound, startAlarm, stopAlarm, unlockAudio, notify, itemsHtml, statusBadge, toEmail, payInfo, payChip, payToggle, bindPayToggle,
   };
 })();
