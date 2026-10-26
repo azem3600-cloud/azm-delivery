@@ -1,0 +1,24 @@
+{
+  "id": "azm-control-center",
+  "name": "عزم ماركت — مركز التحكم",
+  "short_name": "عزم ماركت",
+  "description": "توزيع طلبات عزم ماركت على الفروع ومتابعة المناديب",
+  "start_url": "index.html#live",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#0b3b37",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "الطلبات الحالية", "url": "index.html#live", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "الخريطة المباشرة", "url": "index.html#map", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "التقارير", "url": "index.html#reports", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
