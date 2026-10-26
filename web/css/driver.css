@@ -1,0 +1,62 @@
+body.driver { background: #eef2f5; padding-bottom: env(safe-area-inset-bottom); overscroll-behavior-y: contain; }
+.d-head { position: sticky; top: 0; z-index: 30; background: linear-gradient(135deg, #0b3b37, #0f766e); color: #fff; padding: calc(12px + env(safe-area-inset-top)) 16px 14px; box-shadow: 0 2px 12px #0003; }
+.d-head .row { flex-wrap: nowrap; }
+.d-head h1 { font-size: 18px; margin: 0; }
+.d-head .sub { font-size: 13px; opacity: .85; }
+.duty { display: flex; align-items: center; gap: 10px; background: #ffffff1a; border-radius: 14px; padding: 10px 12px; margin-top: 12px; }
+.duty b { flex: 1; }
+.switch { position: relative; width: 58px; height: 32px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch span { position: absolute; inset: 0; background: #94a3b8; border-radius: 99px; transition: .2s; cursor: pointer; }
+.switch span::before { content: ""; position: absolute; width: 26px; height: 26px; right: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+.switch input:checked + span { background: #22c55e; }
+.switch input:checked + span::before { transform: translateX(-26px); }
+.d-tabs { display: flex; gap: 6px; padding: 10px 12px 0; }
+.d-tabs button { flex: 1; border: 0; background: #fff; border-radius: 12px; padding: 10px; font-weight: 700; color: var(--ink-2); }
+.d-tabs button.active { background: var(--brand); color: #fff; }
+.d-list { padding: 12px; }
+.d-card { background: #fff; border-radius: 18px; box-shadow: var(--shadow); padding: 16px; margin-bottom: 14px; }
+.d-card.new-flash { animation: dflash 1s ease-in-out infinite; border: 3px solid #f59e0b; }
+@keyframes dflash { 50% { box-shadow: 0 0 0 6px #f59e0b55; } }
+.d-card .hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.d-card .hdr .num { font-weight: 800; font-size: 17px; }
+.d-card .cust { font-size: 20px; font-weight: 800; }
+.d-card .addr { color: var(--ink-2); margin: 4px 0 8px; }
+.cod-box { background: #fef3c7; color: #92400e; border-radius: 12px; padding: 10px 12px; font-weight: 800; font-size: 17px; text-align: center; margin: 10px 0; }
+.paid-box { background: #dcfce7; color: #166534; border-radius: 12px; padding: 8px 12px; font-weight: 700; text-align: center; margin: 10px 0; }
+.quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+.quick a, .quick button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border-radius: 12px; background: #f1f5f9; font-weight: 700; font-size: 13px; color: var(--ink); border: 0; }
+.quick .ic { font-size: 22px; }
+.quick .nav-btn { background: #dbeafe; color: #1d4ed8; }
+.quick .wa-btn { background: #dcfce7; color: #15803d; }
+.big-action { width: 100%; padding: 16px; font-size: 18px; border-radius: 14px; border: 0; font-weight: 800; color: #fff; margin-top: 8px; min-height: 58px; }
+.big-action.go { background: #0e7490; }
+.big-action.done { background: #16a34a; }
+.small-actions { display: flex; gap: 8px; margin-top: 8px; }
+.small-actions button { flex: 1; }
+.d-empty { text-align: center; padding: 50px 20px; color: var(--muted); }
+.d-empty .ic { font-size: 54px; }
+.d-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.d-summary .stat .v { font-size: 22px; }
+.gps-warn { background: #fee2e2; color: #991b1b; padding: 10px 14px; font-weight: 700; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.alert-overlay { position: fixed; inset: 0; z-index: 200; background: #0f766ef2; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 14px; }
+.alert-overlay .ic { font-size: 80px; animation: pulse 1s infinite; }
+@keyframes pulse { 50% { transform: scale(1.15); } }
+.alert-overlay h2 { font-size: 28px; }
+.alert-overlay button { background: #fff; color: #0f766e; border: 0; border-radius: 16px; padding: 18px 40px; font-size: 20px; font-weight: 800; }
+details.items-d summary { cursor: pointer; font-weight: 700; padding: 8px 0; color: var(--brand); }
+.foot-note { text-align: center; font-size: 12px; color: var(--muted); padding: 10px 0 30px; }
+
+/* ---- طريقة الدفع عند الاستلام ---- */
+.cod-box { display: flex; flex-direction: column; align-items: center; gap: 6px; transition: background .2s, color .2s; }
+.cod-box .cod-amt b { font-size: 19px; }
+.cod-box .cod-q { font-size: 12.5px; font-weight: 600; opacity: .8; }
+.cod-box.is-card { background: #dbeafe; color: #1e40af; }
+.cod-box .pay-seg { width: 100%; background: rgba(255,255,255,.65); border-color: rgba(0,0,0,.06); }
+.cod-box .pay-seg button { flex: 1; font-size: 15px; padding: 10px 6px; }
+.pay-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pay-pick button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 8px; border: 2px solid #e2e8f0; border-radius: 14px; background: #fff; font: inherit; font-weight: 800; font-size: 17px; color: #334155; cursor: pointer; }
+.pay-pick button .ic { font-size: 30px; }
+.pay-pick button small { font-weight: 500; font-size: 12px; color: #64748b; }
+.pay-pick button.on[data-m="cash"] { border-color: #d97706; background: #fffbeb; color: #92400e; }
+.pay-pick button.on[data-m="card"] { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }

@@ -209,3 +209,13 @@ tr.click:hover td { background: #f8fafc; }
 .modal-wrap { z-index: 2000; }
 #toasts { z-index: 3000; }
 .alert-overlay { z-index: 3500; }
+
+/* ---- طريقة الدفع: نقداً / شبكة ---- */
+.chip-card { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
+.pay-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.pay-seg { display: inline-flex; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 12px; padding: 3px; gap: 3px; }
+.pay-seg button { border: 0; background: transparent; color: #475569; font: inherit; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 9px; cursor: pointer; transition: background .15s, color .15s, box-shadow .15s; }
+.pay-seg button:hover { background: #fff; }
+.pay-seg button.on[data-m="cash"] { background: #d97706; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.pay-seg button.on[data-m="card"] { background: #2563eb; color: #fff; box-shadow: 0 1px 3px rgba(37,99,235,.35); }
+.pay-seg button:disabled { opacity: .6; cursor: wait; }
