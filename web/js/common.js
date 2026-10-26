@@ -213,11 +213,30 @@
       }
     } catch (_) {}
   }
-  function startAlarm() { stopAlarm(); beep(3); alarmTimer = setInterval(() => beep(3), 6000); }
-  function stopAlarm() { if (alarmTimer) clearInterval(alarmTimer); alarmTimer = null; }
+  // أصوات التنبيه (ملفات عالية وواضحة): order = لوحة التحكم/الكاشير، driver = جوال المندوب
+  const SOUND_FILES = { order: "sounds/order.wav", driver: "sounds/driver.wav" };
+  const audios = {};
+  function getAudio(name) {
+    if (!audios[name]) { const a = new Audio(SOUND_FILES[name] || SOUND_FILES.order); a.preload = "auto"; a.volume = 1; audios[name] = a; }
+    return audios[name];
+  }
+  function playSound(name = "order", { loop = false } = {}) {
+    try {
+      const a = getAudio(name); a.loop = loop; a.volume = 1; a.currentTime = 0;
+      const p = a.play(); if (p && p.catch) p.catch(() => beep(4));
+    } catch (_) { beep(4); }
+  }
+  function stopSound() { Object.values(audios).forEach((a) => { try { a.pause(); a.currentTime = 0; a.loop = false; } catch (_) {} }); }
+  function startAlarm(name = "driver") { stopAlarm(); playSound(name, { loop: true }); }
+  function stopAlarm() { if (alarmTimer) clearInterval(alarmTimer); alarmTimer = null; stopSound(); }
   function unlockAudio() {
-    const f = () => { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (_) {} };
+    const f = () => {
+      try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (_) {}
+      // تهيئة ملفات الصوت بعد أول لمسة (شرط المتصفحات للسماح بالتشغيل التلقائي)
+      Object.keys(SOUND_FILES).forEach((n) => { const a = getAudio(n); a.muted = true; const p = a.play(); if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; }); else a.muted = false; });
+    };
     document.addEventListener("click", f, { once: true }); document.addEventListener("touchstart", f, { once: true });
+    Object.keys(SOUND_FILES).forEach(getAudio);
   }
 
   async function notify(title, body) {
@@ -262,6 +281,6 @@
   window.AZM = {
     sb, C, STATUS, ROLES, ACTIVE, $, $$, esc, money, num, fmtTime, fmtDateTime, ago, minutesSince, haversine,
     phoneIntl, telLink, waLink, mapsLink, navLink, productUrl, parseCoords, toast, modal, confirmBox, promptBox, errMsg,
-    rpc, callFn, login, myProfile, logout, beep, startAlarm, stopAlarm, unlockAudio, notify, itemsHtml, statusBadge, toEmail,
+    rpc, callFn, login, myProfile, logout, beep, playSound, stopSound, startAlarm, stopAlarm, unlockAudio, notify, itemsHtml, statusBadge, toEmail,
   };
 })();
