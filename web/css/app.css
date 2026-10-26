@@ -199,3 +199,13 @@ tr.click:hover td { background: #f8fafc; }
 }
 #print-area { display: none; }
 @media print { #print-area { display: block; font-size: 12px; width: 76mm; } }
+
+/* ---------------- إصلاح تداخل الخريطة فوق النوافذ */
+.leaflet-container { isolation: isolate; z-index: 0; }
+.big-map, .mini-map, .pick-map { position: relative; z-index: 0; isolation: isolate; }
+.topbar { z-index: 1100; }
+.side { z-index: 1200; }
+.drawer-wrap { z-index: 1500; }
+.modal-wrap { z-index: 2000; }
+#toasts { z-index: 3000; }
+.alert-overlay { z-index: 3500; }
