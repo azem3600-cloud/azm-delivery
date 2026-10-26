@@ -1,58 +1,83 @@
 #!/usr/bin/env python3
-"""توليد أصوات التنبيه (بدون مكتبات خارجية) — عالية وواضحة.
-order.wav  : لوحة التحكم / الكاشير — رنين ثلاثي مشرق ×2
-driver.wav : جوال المندوب — نغمة مميزة سريعة متكررة مع صفّارة صاعدة
+"""توليد أصوات التنبيه — صوت "صرّافة" (كاشير: كا-تشينغ) عالي وواضح، بدون مكتبات خارجية.
+order.wav  : لوحة التحكم / الكاشير — كا-تشينغ مرتين
+driver.wav : جوال المندوب — كا-تشينغ ثلاث مرات أسرع مع جرس أعلى (مميز)
 """
-import math, os, struct, sys, wave
+import math, os, random, struct, sys, wave
 
 SR = 44100
 OUT = sys.argv[1] if len(sys.argv) > 1 else "web/sounds"
+random.seed(7)
 
 
-def tone(buf, at, f, dur, harm=((1, 1.0), (2, 0.45), (3, 0.25), (4, 0.12)), decay=None):
-    n = int(dur * SR); i0 = int(at * SR); tau = decay or dur / 4
+def add(buf, i0, sig):
+    for k, v in enumerate(sig):
+        if 0 <= i0 + k < len(buf):
+            buf[i0 + k] += v
+
+
+def noise_burst(dur, decay, hp=0.85, amp=1.0):
+    """نقرة ميكانيكية (درج الصرّافة) — ضوضاء مفلترة بتلاشي سريع"""
+    n = int(dur * SR); out = []; prev_x = prev_y = 0.0
     for k in range(n):
-        if i0 + k >= len(buf): break
-        t = k / SR
-        e = min(1.0, t / 0.005) * math.exp(-t / tau)
-        s = 0.0
-        for h, a in harm:
-            s += a * math.sin(2 * math.pi * f * h * t)
-        buf[i0 + k] += s * e
+        x = random.uniform(-1, 1)
+        y = hp * (prev_y + x - prev_x)          # فلتر تمرير عالي بسيط
+        prev_x, prev_y = x, y
+        out.append(amp * y * math.exp(-(k / SR) / decay))
+    return out
 
 
-def sweep(buf, at, f0, f1, dur, amp=0.8):
-    n = int(dur * SR); i0 = int(at * SR); ph = 0.0
+def bell(f, dur, amp=1.0):
+    """جرس معدني (نسب ترددات غير متناسقة مثل جرس الكاشير)"""
+    partials = ((1.0, 1.0, 0.9), (2.76, 0.55, 0.45), (5.40, 0.35, 0.25), (8.93, 0.22, 0.15), (1.5, 0.25, 0.6))
+    n = int(dur * SR); out = []
     for k in range(n):
-        if i0 + k >= len(buf): break
-        t = k / SR
-        ph += 2 * math.pi * (f0 + (f1 - f0) * t / dur) / SR
-        buf[i0 + k] += amp * math.sin(ph) * min(1.0, t / 0.01) * math.exp(-t / 0.25)
+        t = k / SR; att = min(1.0, t / 0.002); s = 0.0
+        for r, a, d in partials:
+            s += a * math.sin(2 * math.pi * f * r * t) * math.exp(-t / d)
+        out.append(amp * att * s)
+    return out
+
+
+def coins(dur, amp=0.35):
+    """رنين عملات خفيف بعد الجرس"""
+    n = int(dur * SR); out = [0.0] * n
+    for _ in range(9):
+        at = random.randint(0, int(n * 0.7)); f = random.uniform(3500, 6500)
+        for k in range(int(0.04 * SR)):
+            if at + k < n:
+                t = k / SR
+                out[at + k] += amp * math.sin(2 * math.pi * f * t) * math.exp(-t / 0.012)
+    return out
+
+
+def ka_ching(buf, at, bell_f=2350, scale=1.0):
+    i = int(at * SR)
+    add(buf, i, noise_burst(0.06, 0.018, amp=0.9 * scale))                 # "كا" — نقرة
+    add(buf, i + int(0.045 * SR), noise_burst(0.05, 0.012, amp=0.6 * scale))
+    add(buf, i + int(0.09 * SR), bell(bell_f, 1.1, amp=1.0 * scale))       # "تشينغ" — جرس
+    add(buf, i + int(0.10 * SR), bell(bell_f * 1.26, 0.9, amp=0.45 * scale))
+    add(buf, i + int(0.12 * SR), coins(0.5))                               # عملات
 
 
 def write(buf, path):
     peak = max(abs(x) for x in buf) or 1.0
-    out = [math.tanh(x / peak * 2.2) for x in buf]          # ضغط لرفع الإحساس بالعلو
+    out = [math.tanh(x / peak * 1.8) for x in buf]          # ضغط لرفع العلو
     peak = max(abs(x) for x in out) or 1.0
-    data = b"".join(struct.pack("<h", int(x / peak * 0.94 * 32767)) for x in out)
+    data = b"".join(struct.pack("<h", int(x / peak * 0.95 * 32767)) for x in out)
     with wave.open(path, "wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes(data)
 
 
 os.makedirs(OUT, exist_ok=True)
 
-b = [0.0] * int(3.6 * SR)
-for rep in range(2):
-    for i, f in enumerate([1046.5, 1318.5, 1568.0]):
-        tone(b, rep * 1.4 + i * 0.16, f, 0.9, decay=0.28)
-tone(b, 2.8, 2093.0, 0.8, decay=0.35)
+b = [0.0] * int(2.6 * SR)
+ka_ching(b, 0.0)
+ka_ching(b, 1.15)
 write(b, os.path.join(OUT, "order.wav"))
 
-b = [0.0] * int(3.0 * SR)
-for rep in range(3):
-    t0 = rep * 1.0
-    for j, f in enumerate([1480, 1975, 1480, 1975]):
-        tone(b, t0 + j * 0.14, f, 0.13, harm=((1, 1.0), (3, 0.3), (5, 0.15)), decay=0.08)
-    sweep(b, t0 + 0.6, 900, 3100, 0.35)
+b = [0.0] * int(2.7 * SR)
+for j in range(3):
+    ka_ching(b, j * 0.75, bell_f=2800)
 write(b, os.path.join(OUT, "driver.wav"))
 print("sounds ->", OUT)
