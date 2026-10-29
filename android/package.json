@@ -1,0 +1,17 @@
+{
+  "name": "azm-driver",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@capacitor-community/background-geolocation": "1.2.19",
+    "@capacitor/android": "6.2.0",
+    "@capacitor/app": "6.0.2",
+    "@capacitor/core": "6.2.0",
+    "@capacitor/local-notifications": "6.1.2",
+    "@capacitor/push-notifications": "6.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "6.2.0"
+  }
+}
