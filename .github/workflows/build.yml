@@ -29,6 +29,7 @@ jobs:
       - run: bash ci/build.sh
         env:
           RUN_NUMBER: ${{ github.run_number }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: driver-v1.0.${{ github.run_number }}
