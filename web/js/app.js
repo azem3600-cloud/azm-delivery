@@ -865,6 +865,8 @@
   // =================================================================== staff
   async function renderStaff() {
     await loadStaff();
+    let pushMap = {};
+    try { (await A.rpc("push_devices")).forEach((x) => { pushMap[x.user_id] = x; }); } catch (_) { pushMap = null; }
     setTitle("الموظفين والمناديب", isAdmin() ? `<button class="btn btn-primary" id="add-user">➕ إضافة موظف / مندوب</button>` : "");
     const rows = S.staff.filter((p) => isAdmin() || p.branch_id === S.me.branch_id);
     const groups = [["driver", "🛵 المناديب"], ["cashier", "🧾 الكاشير"], ["admin", "👑 المدراء"]];
@@ -872,12 +874,13 @@
       const list = rows.filter((p) => p.role === r);
       if (!list.length && r !== "driver") return "";
       return `<div class="card"><div class="card-head"><h3>${t} (${list.length})</h3></div><div class="table-wrap"><table><thead><tr>
-        <th>الاسم</th><th>اسم المستخدم</th><th>الجوال</th><th>الفرع</th>${r === "driver" ? "<th>الحالة</th><th>آخر ظهور</th><th>البطارية</th><th>نشطة</th>" : ""}<th>الحساب</th>${isAdmin() ? "<th></th>" : ""}</tr></thead><tbody>
+        <th>الاسم</th><th>اسم المستخدم</th><th>الجوال</th><th>الفرع</th>${r === "driver" ? "<th>الحالة</th><th>آخر ظهور</th><th>البطارية</th><th>نشطة</th>" + (pushMap ? "<th>الإشعارات</th>" : "") : ""}<th>الحساب</th>${isAdmin() ? "<th></th>" : ""}</tr></thead><tbody>
         ${list.map((p) => `<tr>
           <td><b>${esc(p.full_name)}</b>${p.vehicle ? `<div class="small muted">${esc(p.vehicle)}</div>` : ""}</td><td class="mono">${esc(p.username)}</td>
           <td><a href="${A.telLink(p.phone)}" class="mono">${esc(p.phone || "—")}</a></td><td class="small">${esc(p.branch_id ? branchName(p.branch_id) : "كل الفروع")}</td>
           ${r === "driver" ? `<td><span class="dot ${p.is_online ? "on" : ""}"></span> ${p.is_online ? "متصل" : "غير متصل"}</td><td class="small">${A.ago(p.last_seen_at) || "—"}</td>
-          <td>${p.last_battery != null ? p.last_battery + "%" : "—"}</td><td>${activeCountFor(p.id)}</td>` : ""}
+          <td>${p.last_battery != null ? p.last_battery + "%" : "—"}</td><td>${activeCountFor(p.id)}</td>
+          ${pushMap ? `<td class="small">${pushMap[p.id] ? `<span class="chip chip-paid" title="آخر تسجيل ${esc(A.ago(pushMap[p.id].last_at) || "")}">🔔 مفعّلة</span> <button class="btn btn-sm" data-ptest="${p.id}" title="إرسال إشعار تجريبي">تجربة</button>` : `<span class="muted" title="المندوب ما ثبّت آخر نسخة من التطبيق أو رفض الإشعارات">—</span>`}</td>` : ""}` : ""}
           <td>${p.is_active ? `<span class="chip chip-paid">فعّال</span>` : `<span class="chip chip-warn">موقوف</span>`}</td>
           ${isAdmin() ? `<td class="row" style="flex-wrap:nowrap">
             <button class="btn btn-sm" data-edit="${p.id}">تعديل</button>
@@ -891,6 +894,11 @@
       <a class="btn btn-primary" href="${esc(A.C.APK_URL || "#")}" target="_blank">⬇️ تحميل تطبيق أندرويد APK</a>
       <button class="btn" id="copy-driver-link">📋 نسخ رابط التطبيق</button></div></div>`;
     $("#copy-driver-link").onclick = () => { navigator.clipboard?.writeText(new URL("driver.html", location.href).href); toast("تم النسخ", "ok"); };
+    $$("[data-ptest]").forEach((b) => b.onclick = async () => {
+      b.disabled = true;
+      try { await A.callFn("push", { action: "test", user_id: b.dataset.ptest }); toast("تم إرسال إشعار تجريبي للمندوب ✅", "ok"); }
+      catch (e) { toast(A.errMsg(e), "error"); } finally { b.disabled = false; }
+    });
     if (!isAdmin()) return;
     $("#add-user").onclick = () => userDialog();
     $$("[data-edit]").forEach((b) => b.onclick = () => userDialog(S.staff.find((p) => p.id === b.dataset.edit)));

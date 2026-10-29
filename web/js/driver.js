@@ -11,6 +11,7 @@
   const BG = plug("BackgroundGeolocation");
   const LN = plug("LocalNotifications");
   const CapApp = plug("App");
+  const NX = window.AZM_NATIVE || { power: null, push: null };
 
   const S = { me: null, orders: [], done: [], tab: "active", online: false, watchId: null, lastPing: 0, lastPos: null,
     seen: new Set(), alerting: false, channel: null, gpsError: null, wakeLock: null };
@@ -29,6 +30,7 @@
     }
     await setupNative();
     renderShell();
+    setupPush();
     await loadOrders(true);
     subscribe();
     if (localStorage.getItem("azm-online") !== "0") await goOnline(true);
@@ -47,7 +49,7 @@
       LN?.addListener("localNotificationActionPerformed", () => { loadOrders(); });
     } catch (e) { console.warn(e); }
     try {
-      CapApp?.addListener("resume", () => loadOrders());
+      CapApp?.addListener("resume", () => { loadOrders(); refreshPower(); });
       CapApp?.addListener("backButton", () => { const m = $(".modal-wrap"); if (m) m.remove(); else CapApp.minimizeApp(); });
     } catch (_) {}
   }
@@ -80,6 +82,7 @@
           <label class="switch"><input type="checkbox" id="duty"><span></span></label></div>
       </div>
       <div id="gps-warn"></div>
+      <div id="power-warn"></div>
       <div class="d-tabs"><button data-t="active" class="active">الطلبات الحالية <span id="cnt"></span></button><button data-t="done">مكتملة اليوم</button></div>
       <div class="d-list" id="list"></div>
       <div class="foot-note">عزم ماركت · ${NATIVE ? "تطبيق أندرويد" : "نسخة الويب"}</div>`;
@@ -90,13 +93,14 @@
         <button class="btn" id="m-refresh">🔄 تحديث الطلبات</button>
         <button class="btn" id="m-test">🔔 تجربة صوت التنبيه</button>
         ${NATIVE ? `<button class="btn" id="m-battery">🔋 إعدادات البطارية (مهم لعدم إيقاف التطبيق)</button>` : ""}
+        ${NATIVE ? `<div class="small muted" id="m-push">${pushLabel()}</div>` : ""}
         <button class="btn" id="m-out" style="color:var(--danger)">🚪 تسجيل خروج</button></div>
         <p class="small muted" style="margin-top:14px">💡 لضمان وصول التنبيهات: خلّ وضع "متصل" شغال، وفعّل الإشعارات، واستثنِ التطبيق من توفير البطارية.</p>`,
     }) && setTimeout(() => {
       $("#m-refresh").onclick = () => { loadOrders(); $(".modal-wrap")?.remove(); };
       $("#m-test").onclick = () => { A.playSound("driver"); nativeNotify("🔔 تجربة", "التنبيهات تعمل بشكل سليم"); };
-      $("#m-out").onclick = async () => { await goOffline(); A.logout(); };
-      $("#m-battery") && ($("#m-battery").onclick = () => BG?.openSettings?.());
+      $("#m-out").onclick = async () => { await goOffline(); await NX.push?.unregister(A.rpc); A.logout(); };
+      $("#m-battery") && ($("#m-battery").onclick = () => { $(".modal-wrap")?.remove(); fixPower(true); });
     }, 0);
   }
 
@@ -107,12 +111,85 @@
     $("#gps-warn").innerHTML = S.online && S.gpsError ? `<div class="gps-warn">📍 ${esc(S.gpsError)}</div>` : "";
   }
 
+  // ================================================================= البطارية + الإشعارات الفورية
+  const S2 = { power: null, powerAsked: false };
+  function pushLabel() {
+    const st = NX.push?.state || "off";
+    return { on: "🔔 الإشعارات الفورية: مفعّلة ✅ (توصلك الطلبات حتى لو التطبيق مسكّر)",
+      pending: "🔔 الإشعارات الفورية: جاري التفعيل…",
+      denied: "🔕 الإشعارات مرفوضة — فعّلها من إعدادات الجوال ← التطبيقات ← عزم مندوب ← الإشعارات",
+      error: "⚠️ تعذر تفعيل الإشعارات الفورية — تأكد من الإنترنت وأعد فتح التطبيق",
+      off: "🔔 الإشعارات الفورية غير متاحة في هذه النسخة" }[st] || "";
+  }
+  function setupPush() {
+    if (!NATIVE || !NX.push) return;
+    NX.push.init(A.rpc, {
+      onMessage: () => loadOrders(),
+      onOpen: () => loadOrders(),
+      onState: () => { const el = $("#m-push"); if (el) el.textContent = pushLabel(); },
+    });
+  }
+  function renderPowerWarn() {
+    const el = $("#power-warn"); if (!el) return;
+    const p = S2.power;
+    el.innerHTML = NATIVE && p && p.supported && !p.ignoring
+      ? `<div class="gps-warn" id="pw-fix">🔋 توفير البطارية مفعّل على التطبيق — ممكن الجوال يقفله وتفوتك الطلبات. <b>اضغط هنا للإصلاح</b></div>` : "";
+    const b = $("#pw-fix"); if (b) b.onclick = () => fixPower(true);
+  }
+  async function refreshPower() {
+    if (!NATIVE || !NX.power) return null;
+    const before = S2.power;
+    S2.power = await NX.power.status();
+    renderPowerWarn();
+    // بعد ما يسمح بالإعفاء: نصيحة التشغيل التلقائي مرة وحدة للشركات اللي تقفل التطبيقات بقوة
+    if (before && !before.ignoring && S2.power.ignoring) {
+      toast("تم إعفاء التطبيق من توفير البطارية ✅", "ok");
+      maybeAutoStartTip();
+    }
+    return S2.power;
+  }
+  async function checkPower(silent) {
+    const p = await refreshPower();
+    if (!p || !p.supported) return;
+    if (!p.ignoring) { if (!S2.powerAsked) { S2.powerAsked = true; askPower(); } }
+    else if (!silent) maybeAutoStartTip();
+  }
+  function askPower() {
+    const w = A.modal({
+      title: "🔋 خلّ التطبيق يشتغل بدون توقف",
+      body: `<p>عشان توصلك الطلبات وموقعك يظل يوصل للفرع وأنت مقفل الشاشة، لازم تسمح للتطبيق يشتغل بدون قيود البطارية.</p>
+        <p class="small muted">بيطلع لك سؤال من الجوال، اختر <b>«السماح»</b>.</p>`,
+      actions: [{ label: "لاحقاً", cls: "" }, { label: "السماح الآن", cls: "btn-primary", onClick: async () => { await NX.power.request(); return true; } }],
+    });
+    return w;
+  }
+  function maybeAutoStartTip(force) {
+    const p = S2.power;
+    if (!p || !NX.power.aggressive(p.manufacturer)) return;
+    if (!force && localStorage.getItem("azm-autostart-tip") === "1") return;
+    localStorage.setItem("azm-autostart-tip", "1");
+    A.modal({
+      title: "⚙️ خطوة أخيرة لجوالك",
+      body: `<p>جوالات <b>${esc(p.manufacturer)}</b> تقفل التطبيقات بالخلفية حتى بعد الإعفاء.</p>
+        <p>من الشاشة اللي بتفتح: فعّل <b>«التشغيل التلقائي»</b> لتطبيق <b>عزم مندوب</b>، واختر في البطارية <b>«بدون قيود»</b>.</p>`,
+      actions: [{ label: "تم", cls: "" }, { label: "فتح الإعدادات", cls: "btn-primary", onClick: async () => { await NX.power.openAutoStart(); return true; } }],
+    });
+  }
+  async function fixPower(manual) {
+    const p = await refreshPower();
+    if (!p || !p.supported) { BG?.openSettings?.(); return; }
+    if (!p.ignoring) { await NX.power.request(); return; }
+    if (NX.power.aggressive(p.manufacturer)) return maybeAutoStartTip(true);
+    if (manual) { toast("التطبيق معفى من توفير البطارية ✅", "ok"); NX.power.openAppSettings(); }
+  }
+
   // ================================================================= location tracking
   async function goOnline(silent) {
     S.online = true; localStorage.setItem("azm-online", "1");
     try { await A.rpc("driver_set_online", { p_online: true }); } catch (e) { if (!silent) toast(A.errMsg(e), "error"); }
     startTracking();
     requestWakeLock();
+    if (NATIVE) setTimeout(() => checkPower(silent), 1500);
     if (!NATIVE && "Notification" in window && Notification.permission === "default") Notification.requestPermission();
     setDutyUI(); render();
   }
