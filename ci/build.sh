@@ -24,7 +24,35 @@ rm -rf www && mkdir www
 cp -r ../web/* www/
 cp www/driver.html www/index.html
 rm -f www/sw.js www/manifest.json
+# الإشعارات الفورية تشتغل فقط لو ملف Firebase موجود (سر GitHub: GOOGLE_SERVICES_JSON)
+set +x  # لا نطبع ملف Firebase في سجل البناء
+if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then PUSH_ON=true; else PUSH_ON=false; fi
+set -x
+echo "window.AZM_PUSH = ${PUSH_ON};" > www/js/native-flags.js
 npx cap add android
+if [ "$PUSH_ON" = true ]; then
+  set +x
+  printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+  set -x
+  python3 -c "import json;d=json.load(open('android/app/google-services.json'));assert any(c['client_info']['android_client_info']['package_name']=='sa.azm.driver' for c in d['client']),'google-services.json لا يحتوي sa.azm.driver'"
+fi
+# إضافة إعفاء البطارية (AzmPower)
+JAVA_DIR=android/app/src/main/java/sa/azm/driver
+cp ../ci/native/AzmPowerPlugin.java "$JAVA_DIR/"
+cat > "$JAVA_DIR/MainActivity.java" <<'JAVA'
+package sa.azm.driver;
+
+import android.os.Bundle;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(AzmPowerPlugin.class);
+        super.onCreate(savedInstanceState);
+    }
+}
+JAVA
 mkdir -p android/app/src/main/res/raw && cp ../web/sounds/driver.wav android/app/src/main/res/raw/azm_driver.wav
 mkdir -p assets && cp icon.png assets/icon-only.png
 npx capacitor-assets generate --android --iconBackgroundColor "#0f766e" --splashBackgroundColor "#0f766e" || echo "assets generation skipped"
@@ -41,6 +69,7 @@ perms = """
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 """
 tag = '<uses-permission android:name="android.permission.INTERNET" />'
